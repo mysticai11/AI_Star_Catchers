@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Game Showcase: Catch the Falling Stars</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; /* Tailwind slate-800 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6; /* Tailwind blue-500 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2563eb; /* Tailwind blue-600 */
+        }
+        /* Override iframe pointer events */
+        iframe {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-gray-100 min-h-screen flex flex-col font-sans">
+
+    <header class="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 shadow-lg py-8 relative z-10">
+        <h1 class="text-5xl md:text-6xl font-extrabold text-center text-white drop-shadow-lg tracking-wide px-4">
+            AI Game Showcase: Catch the Falling Stars 🌠
+        </h1>
+        <p class="text-center text-indigo-200 mt-3 max-w-3xl mx-auto px-4 text-lg md:text-xl">
+            Explore different versions of the game created by various AI models.
+        </p>
+    </header>
+
+    <div class="flex flex-col md:flex-row flex-grow overflow-hidden relative z-10">
+        <nav class="bg-indigo-800 md:w-1/4 p-6 shadow-inner md:min-h-screen overflow-y-auto">
+            <h2 class="text-3xl font-semibold mb-8 text-indigo-300 border-b-4 border-indigo-400 pb-3 text-center">
+                Game Versions
+            </h2>
+            <ul id="gameVersionList" class="space-y-4"></ul>
+        </nav>
+
+        <main class="flex-1 p-6 md:p-10 bg-indigo-900 flex flex-col items-center justify-start overflow-auto relative">
+            <div id="welcomeMessage" class="text-center max-w-xl mx-auto px-6 py-10 bg-gradient-to-r from-purple-700 via-pink-600 to-red-500 rounded-3xl shadow-2xl">
+                <h2 class="text-4xl md:text-5xl font-extrabold text-white mb-6 drop-shadow-lg leading-tight">
+                    Welcome to the AI Game Showcase! 🎮✨
+                </h2>
+                <p class="text-lg md:text-xl text-white/90 mb-8 leading-relaxed">
+                    Explore and play different versions of the "Catch the Falling Stars" game, each crafted by a unique AI model.
+                    Select a game from the menu on the left to get started and enjoy the challenge!
+                </p>
+                <img
+                    src="https://placehold.co/400x250/1A202C/E2E8F0?text=🎮+Select+a+Game+🎮"
+                    alt="Placeholder for game selection"
+                    class="mx-auto rounded-xl shadow-lg border-4 border-white/20 max-w-full h-auto"
+                />
+            </div>
+            <div id="gameDisplayArea" class="w-full h-full rounded-lg overflow-hidden shadow-2xl bg-black mt-8 max-w-5xl flex flex-col hidden">
+                <div class="flex justify-end p-2 bg-indigo-800 border-b border-indigo-700">
+                    <button id="backToHomeBtn" class="text-indigo-200 hover:text-white font-semibold px-4 py-2 rounded-md bg-indigo-700 hover:bg-indigo-600 transition duration-300 ease-in-out">
+                        &larr; Back to Home
+                    </button>
+                </div>
+                <iframe
+                    id="gameFrame"
+                    title="Selected Game Version"
+                    class="rounded-b-lg w-full h-[600px] md:h-[700px] border-0 shadow-lg"
+                    allowfullscreen
+                ></iframe>
+            </div>
+        </main>
+    </div>
+
+    <footer class="bg-indigo-800 text-center py-6 mt-auto shadow-inner relative z-10">
+        <p class="text-indigo-300 text-sm md:text-base">&copy; <span id="currentYear"></span> Your AI Game Compilation</p>
+    </footer>
+
+    <script>
+        // --- Configuration: Game Versions ---
+        const gameVersions = [
+            { aiName: "Claude Version", filePath: "game_versions/claude_ctfs.html" },
+            { aiName: "ChatGPT Version", filePath: "game_versions/chatgpt_ctfs.html" },
+            { aiName: "Grok Version", filePath: "game_versions/grok_ctfs.html" },
+            { aiName: "Perplexity Version", filePath: "game_versions/perplexity_ctfs.html.html" },
+            { aiName: "Gemini Version", filePath: "game_versions/gemini_ctfs.html" },
+        ];
+
+        // --- DOM Elements ---
+        const gameVersionList = document.getElementById("gameVersionList");
+        const gameFrame = document.getElementById("gameFrame");
+        const welcomeMessage = document.getElementById("welcomeMessage");
+        const gameDisplayArea = document.getElementById("gameDisplayArea");
+        const currentYearSpan = document.getElementById("currentYear");
+
+        // --- Functions ---
+
+        function populateVersionList() {
+            if (!gameVersionList) {
+                console.error("Navigation list element not found.");
+                return;
+            }
+            if (gameVersions.length === 0) {
+                const listItem = document.createElement("li");
+                listItem.textContent = "No game versions configured. Please check the script.";
+                listItem.className = "text-red-400 p-3 bg-red-900 rounded-md";
+                gameVersionList.appendChild(listItem);
+                return;
+            }
+
+            gameVersions.forEach((version, index) => {
+                const listItem = document.createElement("li");
+                const button = document.createElement("button");
+                button.textContent = version.aiName;
+                button.className =
+                    "nav-button w-full text-left px-4 py-3 bg-indigo-700 hover:bg-indigo-600 rounded-md shadow focus:outline-none focus:ring-2 focus:ring-indigo-400 text-indigo-200 hover:text-white transition duration-300 ease-in-out";
+                button.setAttribute("data-index", index);
+
+                button.addEventListener("click", () => {
+                    loadGameVersion(version.filePath, button);
+                });
+
+                listItem.appendChild(button);
+                gameVersionList.appendChild(listItem);
+            });
+        }
+
+        function loadGameVersion(filePath, clickedButton) {
+            if (!filePath) {
+                console.error("File path is undefined. Cannot load game.");
+                gameFrame.src = "about:blank"; // Clear iframe
+                welcomeMessage.style.display = "block";
+                gameDisplayArea.style.display = "none";
+                return;
+            }
+            welcomeMessage.style.display = "none";
+            gameDisplayArea.style.display = "flex";
+            gameFrame.src = "about:blank";
+            setTimeout(() => {
+                gameFrame.src = filePath;
+                gameFrame.focus();
+            }, 50);
+
+            console.log(`Loading game from: ${filePath}`);
+
+            document.querySelectorAll("#gameVersionList .nav-button").forEach((btn) =>
+                btn.classList.remove("active")
+            );
+            if (clickedButton) {
+                clickedButton.classList.add("active");
+            }
+        }
+
+        function setFooterYear() {
+            if (currentYearSpan) {
+                currentYearSpan.textContent = new Date().getFullYear();
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            populateVersionList();
+            setFooterYear();
+
+            welcomeMessage.style.display = "block";
+            gameDisplayArea.style.display = "none";
+
+            const backToHomeBtn = document.getElementById("backToHomeBtn");
+            backToHomeBtn.addEventListener("click", () => {
+                gameFrame.src = "about:blank";
+                gameDisplayArea.style.display = "none";
+                welcomeMessage.style.display = "block";
+                document.querySelectorAll("#gameVersionList .nav-button").forEach((btn) =>
+                    btn.classList.remove("active")
+                );
+            });
+        });
+    </script>
+</body>
+</html>

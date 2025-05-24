@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catch the Falling Stars</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #1a1a2e; }
+        canvas { border: 2px solid #fff; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let score = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let stars = [];
+        let timeLeft = 60;
+        let gameActive = false;
+        let lastTime = 0;
+
+        // Basket properties
+        const basket = {
+            x: 350,
+            y: 550,
+            width: 100,
+            height: 30,
+            speed: 5
+        };
+
+        // Star properties
+        const starBaseSpeed = 2;
+        let starSpeed = starBaseSpeed;
+
+        // Key states
+        const keys = { ArrowLeft: false, ArrowRight: false };
+
+        // Event listeners for keyboard input
+        document.addEventListener('keydown', (e) => {
+            if (e.key in keys) keys[e.key] = true;
+            if (e.key === 'Enter' && !gameActive) startGame();
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.key in keys) keys[e.key] = false;
+        });
+
+        // Start game function
+        function startGame() {
+            score = 0;
+            stars = [];
+            starSpeed = starBaseSpeed;
+            timeLeft = 60;
+            gameActive = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Spawn a new star
+        function spawnStar() {
+            const star = {
+                x: Math.random() * (canvas.width - 20),
+                y: 0,
+                radius: 10,
+                speed: starSpeed
+            };
+            stars.push(star);
+        }
+
+        // Update game state
+        function update(deltaTime) {
+            // Update basket position
+            if (keys.ArrowLeft && basket.x > 0) basket.x -= basket.speed;
+            if (keys.ArrowRight && basket.x < canvas.width - basket.width) basket.x += basket.speed;
+
+            // Update stars
+            stars.forEach((star, index) => {
+                star.y += star.speed;
+                // Check for collision with basket
+                if (
+                    star.y + star.radius > basket.y &&
+                    star.y - star.radius < basket.y + basket.height &&
+                    star.x > basket.x &&
+                    star.x < basket.x + basket.width
+                ) {
+                    score++;
+                    stars.splice(index, 1);
+                    if (score > highScore) {
+                        highScore = score;
+                        localStorage.setItem('highScore', highScore);
+                    }
+                }
+                // Remove stars that fall off screen
+                else if (star.y > canvas.height) {
+                    stars.splice(index, 1);
+                }
+            });
+
+            // Update time and difficulty
+            timeLeft -= deltaTime / 1000;
+            if (timeLeft <= 0) {
+                gameActive = false;
+            }
+            starSpeed = starBaseSpeed + Math.floor((60 - timeLeft) / 15);
+        }
+
+        // Draw game elements
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw basket
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+
+            // Draw stars
+            ctx.fillStyle = '#ffd700';
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.moveTo(star.x, star.y - star.radius);
+                for (let i = 1; i < 5; i++) {
+                    const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+                    ctx.lineTo(
+                        star.x + Math.cos(angle) * star.radius,
+                        star.y + Math.sin(angle) * star.radius
+                    );
+                }
+                ctx.closePath();
+                ctx.fill();
+            });
+
+            // Draw scores and time
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+            ctx.fillText(`High Score: ${highScore}`, canvas.width - 120, 30);
+            ctx.fillText(`Time: ${Math.ceil(timeLeft)}s`, 10, 60);
+
+            // Draw game over or start screen
+            if (!gameActive) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(timeLeft <= 0 ? 'Game Over!' : 'Press Enter to Start', canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        // Main game loop
+        function gameLoop(timestamp) {
+            if (!gameActive) return;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Spawn stars periodically
+            if (Math.random() < 0.02) spawnStar();
+
+            update(deltaTime);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initial draw for start screen
+        draw();
+    </script>
+</body>
+</html>

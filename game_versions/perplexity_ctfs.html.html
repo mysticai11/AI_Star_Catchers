@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Catch the Falling Stars</title>
+  <meta name="viewport" content="width=800, initial-scale=1.0">
+  <style>
+    body {
+      background: #222;
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-top: 24px;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+    canvas {
+      background: linear-gradient(#001a33, #334466 80%);
+      display: block;
+      margin: 0 auto 24px auto;
+      border: 3px solid #fff3;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px #000a;
+    }
+    #instructions {
+      margin-bottom: 16px;
+      color: #e7e7e7;
+      font-size: 1.1em;
+      text-align: center;
+      max-width: 650px;
+    }
+    #restartBtn {
+      padding: 10px 28px;
+      font-size: 1.1em;
+      background: #ffce54;
+      color: #6e4c1b;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+      box-shadow: 0 2px 8px #0003;
+      display: none;
+    }
+    #restartBtn:hover {
+      background: #ffe9a7;
+    }
+  </style>
+</head>
+<body>
+  <h1>Catch the Falling Stars</h1>
+  <div id="instructions">
+    Move the <b>basket</b> with <b>←</b> and <b>→</b> to catch as many falling stars as you can in 60 seconds.<br>
+    Each star caught gives <b>+1</b> point. Missed stars simply disappear.<br>
+    <span style="color:#ffe066;">Tip: The stars fall faster every 15 seconds!</span>
+  </div>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <button id="restartBtn">Restart</button>
+  <script>
+    // --- Game Constants ---
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+    const BASKET_WIDTH = 100;
+    const BASKET_HEIGHT = 25;
+    const BASKET_Y = CANVAS_HEIGHT - 60;
+    const STAR_RADIUS = 18;
+    const STAR_POINTS = 5;
+    const GAME_DURATION = 60; // seconds
+    const STAR_SPAWN_INTERVAL = 700; // ms, will decrease as game progresses
+    const STAR_INITIAL_SPEED = 2.5; // px/frame
+    const SPEED_INCREASE_INTERVAL = 15; // seconds
+    const SPEED_INCREASE_AMOUNT = 1.5; // px/frame
+    const MIN_STAR_SPAWN_INTERVAL = 300; // ms
+
+    // --- Canvas & Context ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- Game State ---
+    let basket = { x: CANVAS_WIDTH / 2 - BASKET_WIDTH / 2, speed: 8 };
+    let stars = [];
+    let keys = { left: false, right: false };
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('ctfs_highscore') || '0');
+    let startTime = null;
+    let elapsed = 0;
+    let gameOver = false;
+    let starSpeed = STAR_INITIAL_SPEED;
+    let starSpawnInterval = STAR_SPAWN_INTERVAL;
+    let lastStarSpawn = 0;
+    let restartBtn = document.getElementById('restartBtn');
+    let animationId = null;
+
+    // --- Utility: Draw a Five-Pointed Star ---
+    function drawStar(cx, cy, radius, color = '#ffe066', stroke = '#f7b731') {
+      ctx.save();
+      ctx.beginPath();
+      ctx.translate(cx, cy);
+      ctx.moveTo(0, -radius);
+      for (let i = 0; i < STAR_POINTS * 2; i++) {
+        const angle = (Math.PI / STAR_POINTS) * i;
+        const r = i % 2 === 0 ? radius : radius * 0.45;
+        ctx.lineTo(Math.sin(angle) * r, -Math.cos(angle) * r);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.shadowColor = '#fff9';
+      ctx.shadowBlur = 12;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // --- Utility: Draw the Basket ---
+    function drawBasket(x) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, BASKET_Y, BASKET_WIDTH, BASKET_HEIGHT);
+      ctx.fillStyle = '#8d5524';
+      ctx.shadowColor = '#0008';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#5d3a13';
+      ctx.stroke();
+      // Add basket rim
+      ctx.beginPath();
+      ctx.rect(x, BASKET_Y, BASKET_WIDTH, 7);
+      ctx.fillStyle = '#c68642';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // --- Utility: Draw Score & Timer ---
+    function drawUI() {
+      ctx.save();
+      ctx.font = 'bold 26px Segoe UI, Arial';
+      ctx.fillStyle = '#ffe066';
+      ctx.textAlign = 'left';
+      ctx.fillText('Score: ' + score, 20, 42);
+      ctx.textAlign = 'right';
+      ctx.fillText('High Score: ' + highScore, CANVAS_WIDTH - 20, 42);
+      // Timer
+      ctx.font = 'bold 22px Segoe UI, Arial';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      let timeLeft = Math.max(0, GAME_DURATION - Math.floor(elapsed));
+      ctx.fillText('Time: ' + timeLeft + 's', CANVAS_WIDTH / 2, 42);
+      ctx.restore();
+    }
+
+    // --- Handle Keyboard Input ---
+    document.addEventListener('keydown', e => {
+      if (e.code === 'ArrowLeft') keys.left = true;
+      if (e.code === 'ArrowRight') keys.right = true;
+    });
+    document.addEventListener('keyup', e => {
+      if (e.code === 'ArrowLeft') keys.left = false;
+      if (e.code === 'ArrowRight') keys.right = false;
+    });
+
+    // --- Spawn a New Star at Random X ---
+    function spawnStar() {
+      const margin = STAR_RADIUS + 10;
+      const x = Math.random() * (CANVAS_WIDTH - 2 * margin) + margin;
+      stars.push({
+        x: x,
+        y: -STAR_RADIUS,
+        radius: STAR_RADIUS,
+        speed: starSpeed
+      });
+    }
+
+    // --- Update All Stars: Move, Check Caught/Missed ---
+    function updateStars() {
+      for (let i = stars.length - 1; i >= 0; i--) {
+        let star = stars[i];
+        star.y += star.speed;
+        // Check if caught by basket
+        if (
+          star.y + star.radius >= BASKET_Y &&
+          star.y - star.radius <= BASKET_Y + BASKET_HEIGHT &&
+          star.x + star.radius >= basket.x &&
+          star.x - star.radius <= basket.x + BASKET_WIDTH
+        ) {
+          score++;
+          stars.splice(i, 1);
+          continue;
+        }
+        // Remove if missed (falls below basket)
+        if (star.y - star.radius > CANVAS_HEIGHT) {
+          stars.splice(i, 1);
+        }
+      }
+    }
+
+    // --- Move Basket Based on Arrow Keys ---
+    function updateBasket() {
+      if (keys.left) basket.x -= basket.speed;
+      if (keys.right) basket.x += basket.speed;
+      // Clamp within canvas
+      basket.x = Math.max(0, Math.min(CANVAS_WIDTH - BASKET_WIDTH, basket.x));
+    }
+
+    // --- Increase Difficulty Over Time ---
+    function updateDifficulty() {
+      let level = Math.floor(elapsed / SPEED_INCREASE_INTERVAL);
+      starSpeed = STAR_INITIAL_SPEED + level * SPEED_INCREASE_AMOUNT;
+      starSpawnInterval = Math.max(
+        MIN_STAR_SPAWN_INTERVAL,
+        STAR_SPAWN_INTERVAL - level * 100
+      );
+    }
+
+    // --- Draw Everything ---
+    function render() {
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      // Draw stars
+      for (let star of stars) {
+        drawStar(star.x, star.y, star.radius);
+      }
+      // Draw basket
+      drawBasket(basket.x);
+      // Draw UI
+      drawUI();
+    }
+
+    // --- Main Game Loop ---
+    function gameLoop(timestamp) {
+      if (!startTime) startTime = timestamp;
+      elapsed = (timestamp - startTime) / 1000;
+      updateDifficulty();
+      updateBasket();
+      updateStars();
+      // Spawn stars at interval
+      if (timestamp - lastStarSpawn > starSpawnInterval) {
+        spawnStar();
+        lastStarSpawn = timestamp;
+      }
+      render();
+
+      // Check for game over
+      if (elapsed < GAME_DURATION) {
+        animationId = requestAnimationFrame(gameLoop);
+      } else {
+        endGame();
+      }
+    }
+
+    // --- End Game: Show Message, Update High Score ---
+    function endGame() {
+      gameOver = true;
+      // Update high score
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('ctfs_highscore', highScore);
+      }
+      // Draw overlay
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#222b';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalAlpha = 1;
+      ctx.font = 'bold 48px Segoe UI, Arial';
+      ctx.fillStyle = '#ffe066';
+      ctx.textAlign = 'center';
+      ctx.fillText('Time\'s up!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 30);
+      ctx.font = 'bold 32px Segoe UI, Arial';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('Your Score: ' + score, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 18);
+      ctx.font = '24px Segoe UI, Arial';
+      ctx.fillStyle = '#ffe066';
+      ctx.fillText('Press [Restart] to play again!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 60);
+      ctx.restore();
+      restartBtn.style.display = 'inline-block';
+    }
+
+    // --- Start/Restart Game ---
+    function startGame() {
+      // Reset state
+      stars = [];
+      score = 0;
+      elapsed = 0;
+      startTime = null;
+      gameOver = false;
+      starSpeed = STAR_INITIAL_SPEED;
+      starSpawnInterval = STAR_SPAWN_INTERVAL;
+      lastStarSpawn = 0;
+      basket.x = CANVAS_WIDTH / 2 - BASKET_WIDTH / 2;
+      restartBtn.style.display = 'none';
+      cancelAnimationFrame(animationId);
+      render();
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    // --- Restart Button Handler ---
+    restartBtn.addEventListener('click', startGame);
+
+    // --- Initial Render & Start ---
+    render();
+    setTimeout(startGame, 800); // small delay for user to read instructions
+  </script>
+</body>
+</html>

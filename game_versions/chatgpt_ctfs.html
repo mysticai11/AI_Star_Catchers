@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Catch the Falling Stars</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      text-align: center;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      background: #111;
+      border: 2px solid #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>Catch the Falling Stars</h1>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <script>
+    // Get canvas and context
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Game constants
+    const basketWidth = 100;
+    const basketHeight = 20;
+    const starRadius = 12;
+    const gameDuration = 60; // in seconds
+
+    // Game state
+    let basketX = canvas.width / 2 - basketWidth / 2;
+    let basketSpeed = 7;
+    let keys = {};
+    let stars = [];
+    let score = 0;
+    let highScore = 0;
+    let startTime = null;
+    let elapsed = 0;
+    let gameOver = false;
+    let fallSpeed = 2;
+
+    // Handle key press
+    document.addEventListener("keydown", e => keys[e.key] = true);
+    document.addEventListener("keyup", e => keys[e.key] = false);
+
+    // Draw a five-pointed star
+    function drawStar(x, y, radius, color) {
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      const spikes = 5;
+      const outerRadius = radius;
+      const innerRadius = radius / 2;
+      let rot = Math.PI / 2 * 3;
+      let step = Math.PI / spikes;
+      ctx.moveTo(x, y - outerRadius);
+      for (let i = 0; i < spikes; i++) {
+        ctx.lineTo(x + Math.cos(rot) * outerRadius, y + Math.sin(rot) * outerRadius);
+        rot += step;
+        ctx.lineTo(x + Math.cos(rot) * innerRadius, y + Math.sin(rot) * innerRadius);
+        rot += step;
+      }
+      ctx.lineTo(x, y - outerRadius);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Draw basket
+    function drawBasket() {
+      ctx.fillStyle = "#8B4513"; // brown
+      ctx.fillRect(basketX, canvas.height - basketHeight - 10, basketWidth, basketHeight);
+    }
+
+    // Update basket position
+    function updateBasket() {
+      if (keys["ArrowLeft"]) {
+        basketX -= basketSpeed;
+        if (basketX < 0) basketX = 0;
+      }
+      if (keys["ArrowRight"]) {
+        basketX += basketSpeed;
+        if (basketX + basketWidth > canvas.width) basketX = canvas.width - basketWidth;
+      }
+    }
+
+    // Add new star
+    function spawnStar() {
+      const x = Math.random() * (canvas.width - starRadius * 2) + starRadius;
+      stars.push({ x, y: -starRadius });
+    }
+
+    // Update and draw stars
+    function updateStars() {
+      for (let i = stars.length - 1; i >= 0; i--) {
+        stars[i].y += fallSpeed;
+        drawStar(stars[i].x, stars[i].y, starRadius, "yellow");
+
+        // Check collision with basket
+        const bx = basketX, bw = basketWidth;
+        const by = canvas.height - basketHeight - 10;
+        const bh = basketHeight;
+
+        if (
+          stars[i].y + starRadius > by &&
+          stars[i].y - starRadius < by + bh &&
+          stars[i].x > bx &&
+          stars[i].x < bx + bw
+        ) {
+          score++;
+          stars.splice(i, 1);
+        } else if (stars[i].y > canvas.height + starRadius) {
+          // Remove missed stars
+          stars.splice(i, 1);
+        }
+      }
+    }
+
+    // Draw score and high score
+    function drawScores() {
+      ctx.fillStyle = "#fff";
+      ctx.font = "20px sans-serif";
+      ctx.fillText("Score: " + score, 10, 25);
+      ctx.fillText("High Score: " + highScore, canvas.width - 160, 25);
+    }
+
+    // End game and show message
+    function endGame() {
+      gameOver = true;
+      highScore = Math.max(highScore, score);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.font = "36px sans-serif";
+      ctx.fillText("Time's Up!", canvas.width / 2 - 90, canvas.height / 2 - 20);
+      ctx.font = "28px sans-serif";
+      ctx.fillText("Final Score: " + score, canvas.width / 2 - 90, canvas.height / 2 + 20);
+      ctx.fillText("Refresh to play again", canvas.width / 2 - 120, canvas.height / 2 + 60);
+    }
+
+    // Game loop
+    function gameLoop(timestamp) {
+      if (!startTime) startTime = timestamp;
+      elapsed = (timestamp - startTime) / 1000;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (elapsed >= gameDuration) {
+        endGame();
+        return;
+      }
+
+      // Increase difficulty every 15 seconds
+      fallSpeed = 2 + Math.floor(elapsed / 15);
+
+      // Game logic
+      updateBasket();
+      if (Math.random() < 0.02 * fallSpeed) spawnStar();
+      updateStars();
+      drawBasket();
+      drawScores();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start game
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
